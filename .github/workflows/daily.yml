@@ -57,5 +57,6 @@ jobs:
             echo "沒有新資料"
           else
             git commit -m "data: $(TZ=Asia/Taipei date +%F)"
-            git push
+            for i in 1 2 3; do git pull --rebase origin main && git push && exit 0; sleep 10; done
+            exit 1
           fi
