@@ -23,9 +23,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -33,7 +33,7 @@ jobs:
       - run: pip install -r requirements.txt
 
       - name: 測試
-        run: pytest -q
+        run: python -m pytest -q
 
       - name: 回補歷史
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.backfill_days != '0'
@@ -51,6 +51,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ ! -d data ]; then echo "沒有資料可存"; exit 0; fi
           git add data
           if git diff --cached --quiet; then
             echo "沒有新資料"
