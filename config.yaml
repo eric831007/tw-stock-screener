@@ -1,0 +1,18 @@
+# 熱度評分設定（第 3 週的評分模組會讀這個檔案；改這裡就好，不用改程式）
+
+weights:            # 四類子分數的權重，加總 = 1
+  volume: 0.30      # 量
+  price: 0.25       # 價
+  institutional: 0.30  # 法人籌碼
+  technical: 0.15   # 技術指標
+
+filters:
+  min_avg_volume_lots: 1000   # 20 日平均成交量低於此張數就排除（1 張 = 1,000 股）
+  include_etf: true           # ETF 納入評分，產業熱度中自成一組
+
+report:
+  top_n: 50                   # 排行榜列出前幾名
+
+overheat:                     # 過熱警示
+  rsi_above: 80
+  return_5d_above_pct: 25
