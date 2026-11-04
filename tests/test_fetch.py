@@ -104,6 +104,32 @@ def test_tpex_parse(monkeypatch):
         (150_000, 30_000, -2_000, 178_000)
 
 
+TPEX_INST_TWO_LEVEL = {
+    "tables": [{
+        "fields": ["代號", "名稱"] + ["買進股數", "賣出股數", "買賣超股數"] * 7 + ["三大法人買賣超股數合計"],
+        # 外資(不含) 外資自營 外資合計 投信 自營(自行) 自營(避險) 自營合計 三大法人
+        "data": [["6488", "環球晶", "200,000", "50,000", "150,000", "1,000", "0", "1,000",
+                  "201,000", "50,000", "151,000", "30,000", "0", "30,000", "1,000", "0", "1,000",
+                  "0", "3,000", "-3,000", "1,000", "3,000", "-2,000", "179,000"]],
+    }],
+}
+
+
+def test_tpex_two_level_headers(monkeypatch):
+    monkeypatch.setattr(http, "get_json", fake_get_json({"dailyTrade": TPEX_INST_TWO_LEVEL}))
+    i = tpex.institutional(dt.date(2026, 11, 4)).iloc[0]
+    assert (i["foreign_net"], i["trust_net"], i["dealer_net"], i["total_net"]) == \
+        (150_000, 30_000, -2_000, 179_000)
+
+
+def test_tpex_wrong_column_order_is_caught(monkeypatch):
+    bad = {"tables": [dict(TPEX_INST_TWO_LEVEL["tables"][0])]}
+    bad["tables"][0]["data"] = [TPEX_INST_TWO_LEVEL["tables"][0]["data"][0][:-1] + ["999,999"]]
+    monkeypatch.setattr(http, "get_json", fake_get_json({"dailyTrade": bad}))
+    with pytest.raises(parse.SchemaError, match="順序"):
+        tpex.institutional(dt.date(2026, 11, 4))
+
+
 def test_schema_change_fails_loudly():
     with pytest.raises(parse.SchemaError, match="收盤"):
         parse.price_table(["證券代號", "證券名稱", "成交股數", "成交金額", "開盤價", "最高價", "最低價"],
