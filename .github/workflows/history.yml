@@ -61,6 +61,7 @@ jobs:
           cd "$SCREENER_DATA_DIR"
           zip -qr "/tmp/history-${{ matrix.year }}.zip" .
           ls -lh "/tmp/history-${{ matrix.year }}.zip"
+          cd "$GITHUB_WORKSPACE"
           gh release view history >/dev/null 2>&1 || \
             gh release create history --title "歷史資料" --notes "每年一個壓縮檔，內容與 data 資料夾相同格式。"
           gh release upload history "/tmp/history-${{ matrix.year }}.zip" --clobber
