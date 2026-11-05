@@ -3,6 +3,7 @@
     python -m screener fetch                 # 抓今天（台灣時間）
     python -m screener fetch --date 2026-11-04
     python -m screener backfill --days 120   # 回補最近 120 個交易日
+    python -m screener backfill --start 2004-01-01 --end 2004-12-31  # 回補指定期間
     python -m screener status                # 看目前存了多少資料
 """
 from __future__ import annotations
@@ -13,7 +14,7 @@ import logging
 import sys
 
 from . import store
-from .fetch import backfill, fetch_day, today_taipei, update_stock_info
+from .fetch import backfill, backfill_range, fetch_day, today_taipei, update_stock_info
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -25,6 +26,8 @@ def main(argv: list[str] | None = None) -> int:
 
     p_back = sub.add_parser("backfill", help="回補過去 N 個交易日")
     p_back.add_argument("--days", type=int, default=120)
+    p_back.add_argument("--start", type=dt.date.fromisoformat, help="YYYY-MM-DD，與 --end 一起用")
+    p_back.add_argument("--end", type=dt.date.fromisoformat, help="YYYY-MM-DD")
 
     sub.add_parser("status", help="顯示已存資料概況")
 
@@ -41,7 +44,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "backfill":
         update_stock_info()
-        backfill(args.days)
+        if args.start:
+            end = min(args.end or today_taipei(), today_taipei())
+            backfill_range(args.start, end)
+        else:
+            backfill(args.days)
         return 0
 
     if args.command == "status":

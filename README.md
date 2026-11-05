@@ -51,6 +51,14 @@ pytest                                   # 跑測試
 第一次使用：到 repo 的 **Actions** 分頁 → 選「每日抓取台股資料」→ **Run workflow**，
 `backfill_days` 填 `120`，就會回補歷史資料。
 
+## 回補很久以前的歷史資料
+
+`.github/workflows/history.yml`：到 **Actions** → 「回補歷史資料（依年份）」→ **Run workflow**，
+填起訖年份（最早 2004）。每一年依序跑一次，打包成 `history-YYYY.zip` 放到 repo 的 **Releases → history**，
+不放進 `data` 資料夾，以免 repo 太大。
+
+資料最早大約到：上市行情 2004 年、上櫃行情 2007 年、上市三大法人 2012 年；更早的年份只會有部分資料。
+
 ## 評分設定
 
 權重、流動性門檻等都在 `config.yaml`，改那裡就好，不需要改程式。

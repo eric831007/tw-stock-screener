@@ -79,6 +79,19 @@ def backfill(trading_days: int, end: dt.date | None = None) -> None:
     log.warning("往回 %d 天只找到 %d 個交易日", limit, found)
 
 
+def backfill_range(start: dt.date, end: dt.date) -> None:
+    """Fetch every weekday from `end` back to `start` (inclusive)."""
+    day, found = end, 0
+    while day >= start:
+        status = fetch_day(day)
+        if status in {"complete", "partial"}:
+            found += 1
+            if found % 20 == 0:
+                log.info("進度：%s，已完成 %d 個交易日", day, found)
+        day -= dt.timedelta(days=1)
+    log.info("%s ～ %s 共 %d 個交易日", start, end, found)
+
+
 def update_stock_info() -> None:
     frames = []
     for market, source in MARKETS.items():

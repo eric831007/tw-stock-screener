@@ -144,13 +144,19 @@ def pick_table(payload: dict, must_have: Sequence[str]) -> tuple[list, list] | N
     """Find the (fields, data) table whose headers contain all of must_have.
 
     Handles both shapes the exchanges use:
-      {"fields": [...], "data": [...]}            (old style)
+      {"fields": [...], "data": [...]}            (single table)
+      {"fields9": [...], "data9": [...]}          (older numbered tables)
       {"tables": [{"fields": [...], "data": [...]}, ...]}  (new style)
     """
     candidates = []
     if "fields" in payload and "data" in payload:
         candidates.append(payload)
     candidates.extend(t for t in payload.get("tables", []) if isinstance(t, dict))
+    # Older TWSE responses use numbered keys: fields1/data1 ... fields9/data9
+    for key in sorted(payload):
+        m = re.fullmatch(r"fields(\d+)", key)
+        if m and f"data{m.group(1)}" in payload:
+            candidates.append({"fields": payload[key], "data": payload[f"data{m.group(1)}"]})
     for t in candidates:
         h = clean_headers(t.get("fields") or [])
         if all(any(m in x for x in h) for m in must_have) and t.get("data"):

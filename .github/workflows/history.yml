@@ -1,0 +1,66 @@
+name: 回補歷史資料（依年份）
+
+# 手動執行：選起訖年份，每一年各跑一次（一次只跑一年，避免被交易所封鎖），
+# 抓好的資料打包成 history-YYYY.zip，放到 Releases 的「history」裡，不進 repo。
+on:
+  workflow_dispatch:
+    inputs:
+      start_year:
+        description: "從哪一年開始（最早 2004）"
+        required: true
+        default: "2004"
+      end_year:
+        description: "到哪一年結束"
+        required: true
+        default: "2025"
+
+permissions:
+  contents: write   # 建立 Release、上傳壓縮檔
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      years: ${{ steps.years.outputs.years }}
+    steps:
+      - id: years
+        run: |
+          years=$(python3 -c "import json; print(json.dumps(list(range(int('${{ github.event.inputs.end_year }}'), int('${{ github.event.inputs.start_year }}') - 1, -1))))")
+          echo "years=$years" >> "$GITHUB_OUTPUT"
+          echo "要回補的年份：$years"
+
+  year:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    strategy:
+      max-parallel: 1     # 一年跑完再跑下一年
+      fail-fast: false    # 某一年失敗，其他年份照跑
+      matrix:
+        year: ${{ fromJSON(needs.plan.outputs.years) }}
+    env:
+      SCREENER_DATA_DIR: /tmp/history-${{ matrix.year }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: 抓 ${{ matrix.year }} 年
+        run: python -m screener backfill --start ${{ matrix.year }}-01-01 --end ${{ matrix.year }}-12-31
+
+      - name: 打包上傳到 Releases
+        if: always()
+        run: |
+          if [ ! -d "$SCREENER_DATA_DIR/prices" ]; then echo "這一年沒有抓到資料"; exit 1; fi
+          cd "$SCREENER_DATA_DIR"
+          zip -qr "/tmp/history-${{ matrix.year }}.zip" .
+          ls -lh "/tmp/history-${{ matrix.year }}.zip"
+          gh release view history >/dev/null 2>&1 || \
+            gh release create history --title "歷史資料" --notes "每年一個壓縮檔，內容與 data 資料夾相同格式。"
+          gh release upload history "/tmp/history-${{ matrix.year }}.zip" --clobber

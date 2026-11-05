@@ -43,19 +43,24 @@ def institutional(day: dt.date) -> pd.DataFrame | None:
 
 # 櫃買中心的三大法人表是兩層表頭：第二層每欄只寫「買進股數／賣出股數／買賣超股數」，
 # 類別放在第一層。依櫃買中心固定的欄位順序，把類別名稱補回每一欄前面。
-INST_GROUPS = ["外資及陸資(不含外資自營商)", "外資自營商", "外資及陸資", "投信",
-               "自營商(自行買賣)", "自營商(避險)", "自營商"]
+# 依欄位組數對應櫃買中心各時期的表格格式；猜錯時下方的加總檢查會擋下來。
+INST_LAYOUTS = {
+    7: ["外資及陸資(不含外資自營商)", "外資自營商", "外資及陸資", "投信",
+        "自營商(自行買賣)", "自營商(避險)", "自營商"],
+    5: ["外資及陸資", "投信", "自營商(自行買賣)", "自營商(避險)", "自營商"],
+    3: ["外資及陸資", "投信", "自營商"],
+}
 
 
 def _expand_headers(fields, rows) -> list[str]:
     h = clean_headers(fields)
     if len(set(h)) == len(h):
         return h  # headers already unique: nothing to do
-    expected = 2 + 3 * len(INST_GROUPS) + 1
-    if len(h) != expected or not h[-1].startswith("三大法人"):
-        raise SchemaError(f"上櫃三大法人欄位數與預期不同（{len(h)} 欄，預期 {expected}）：{h}")
+    groups = INST_LAYOUTS.get((len(h) - 3) // 3) if (len(h) - 3) % 3 == 0 else None
+    if groups is None or not h[-1].startswith("三大法人"):
+        raise SchemaError(f"上櫃三大法人欄位格式不認得（{len(h)} 欄）：{h}")
     out = h[:2]
-    for i, group in enumerate(INST_GROUPS):
+    for i, group in enumerate(groups):
         out += [f"{group}-{x}" for x in h[2 + 3 * i: 5 + 3 * i]]
     out.append(h[-1])
     _check_order(out, rows)

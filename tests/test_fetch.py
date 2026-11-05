@@ -176,3 +176,30 @@ def test_industry_names():
     assert industry_name("24", "2330") == "半導體業"
     assert industry_name("", "00878") == "ETF"
     assert industry_name("99", "1234") == "產業99"
+
+
+def test_old_numbered_tables():
+    payload = {"stat": "OK", "fields1": ["指數", "收盤指數"], "data1": [["x", "1"]],
+               "fields9": TWSE_PRICES["tables"][1]["fields"], "data9": TWSE_PRICES["tables"][1]["data"]}
+    fields, rows = parse.pick_table(payload, ["代號", "收盤"])
+    assert len(rows) == 4
+
+
+def test_tpex_old_three_group_layout(monkeypatch):
+    old = {"tables": [{
+        "fields": ["代號", "名稱"] + ["買進股數", "賣出股數", "買賣超股數"] * 3 + ["三大法人買賣超股數"],
+        "data": [["6488", "環球晶", "200,000", "50,000", "150,000", "30,000", "0", "30,000",
+                  "1,000", "3,000", "-2,000", "178,000"]],
+    }]}
+    monkeypatch.setattr(http, "get_json", fake_get_json({"dailyTrade": old}))
+    i = tpex.institutional(dt.date(2010, 3, 4)).iloc[0]
+    assert (i["foreign_net"], i["trust_net"], i["dealer_net"], i["total_net"]) == \
+        (150_000, 30_000, -2_000, 178_000)
+
+
+def test_backfill_range(data_dir, monkeypatch):
+    responses = {"MI_INDEX": TWSE_PRICES, "T86": TWSE_T86,
+                 "dailyQuotes": TPEX_PRICES, "dailyTrade": TPEX_INST}
+    monkeypatch.setattr(http, "get_json", fake_get_json(responses))
+    fetch.backfill_range(dt.date(2010, 3, 1), dt.date(2010, 3, 7))  # Mon..Sun
+    assert len(store.trading_days()) == 5
