@@ -14,6 +14,9 @@ from .sources import MARKETS
 log = logging.getLogger(__name__)
 TAIPEI = ZoneInfo("Asia/Taipei")
 
+# 這次執行中抓取失敗的項目，例如 "2026-06-17 TPEx prices：連續 5 次請求失敗"
+failures: list[str] = []
+
 
 def today_taipei() -> dt.date:
     return dt.datetime.now(TAIPEI).date()
@@ -35,7 +38,9 @@ def fetch_day(day: dt.date) -> str:
 
     # TWSE prices first: no TWSE prices on a past weekday means the market was closed.
     if not store.has("prices", day, "TWSE"):
-        df = MARKETS["TWSE"].prices(day)
+        df = _try(MARKETS["TWSE"].prices, day, "TWSE", "prices")
+        if df is _FAILED:
+            return "partial"
         if df is None:
             if day < today_taipei():
                 store.mark_holiday(day)
@@ -49,13 +54,28 @@ def fetch_day(day: dt.date) -> str:
         for market, source in MARKETS.items():
             if store.has(kind, day, market):
                 continue
-            df = getattr(source, kind)(day)
+            df = _try(getattr(source, kind), day, market, kind)
+            if df is _FAILED:
+                continue
             if df is None or df.empty:
                 log.warning("%s %s %s 尚無資料（可能還沒公布）", day, market, kind)
                 continue
             _save(kind, day, market, df)
 
     return "complete" if store.is_complete(day) else "partial"
+
+
+_FAILED = object()
+
+
+def _try(func, day: dt.date, market: str, kind: str):
+    """Run one download; on failure log it, remember it, and let the caller move on."""
+    try:
+        return func(day)
+    except Exception as exc:
+        failures.append(f"{day} {market} {kind}：{exc}")
+        log.error("%s %s %s 抓取失敗，先跳過，下次執行會再補：%s", day, market, kind, exc)
+        return _FAILED
 
 
 def _save(kind: str, day: dt.date, market: str, df: pd.DataFrame) -> None:

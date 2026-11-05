@@ -13,7 +13,7 @@ import requests
 log = logging.getLogger(__name__)
 
 MIN_INTERVAL = 3.0  # seconds between requests
-RETRIES = 3
+RETRIES = 5
 TIMEOUT = 30
 
 _session = requests.Session()
@@ -42,5 +42,6 @@ def get_json(url: str, params: dict | None = None):
         except (requests.RequestException, ValueError) as exc:
             error = exc
             log.warning("第 %d 次請求失敗 %s：%s", attempt, url, exc)
-            time.sleep(MIN_INTERVAL * attempt * 2)
+            if attempt < RETRIES:
+                time.sleep(min(120, 10 * 2 ** (attempt - 1)))  # 10, 20, 40, 80 秒
     raise RuntimeError(f"連續 {RETRIES} 次請求失敗：{url}（{error}）")

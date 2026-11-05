@@ -203,3 +203,20 @@ def test_backfill_range(data_dir, monkeypatch):
     monkeypatch.setattr(http, "get_json", fake_get_json(responses))
     fetch.backfill_range(dt.date(2010, 3, 1), dt.date(2010, 3, 7))  # Mon..Sun
     assert len(store.trading_days()) == 5
+
+
+def test_one_failed_day_does_not_stop_backfill(data_dir, monkeypatch):
+    responses = {"MI_INDEX": TWSE_PRICES, "T86": TWSE_T86, "dailyTrade": TPEX_INST}
+    def flaky(url, params=None):
+        if "dailyQuotes" in url:
+            if params and params.get("date") == "2010/03/03":
+                raise RuntimeError("連續 5 次請求失敗")
+            return TPEX_PRICES
+        return fake_get_json(responses)(url, params)
+    monkeypatch.setattr(http, "get_json", flaky)
+    monkeypatch.setattr(fetch, "failures", [])
+    fetch.backfill_range(dt.date(2010, 3, 1), dt.date(2010, 3, 5))
+    assert len(store.trading_days()) == 5
+    assert not store.is_complete(dt.date(2010, 3, 3))
+    assert store.is_complete(dt.date(2010, 3, 4))
+    assert len(fetch.failures) == 1 and "2010-03-03 TPEx prices" in fetch.failures[0]

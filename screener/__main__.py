@@ -13,6 +13,7 @@ import datetime as dt
 import logging
 import sys
 
+from . import fetch as fetch_mod
 from . import store
 from .fetch import backfill, backfill_range, fetch_day, today_taipei, update_stock_info
 
@@ -40,7 +41,7 @@ def main(argv: list[str] | None = None) -> int:
         update_stock_info()
         status = fetch_day(day)
         print(f"{day}：{status}")
-        return 1 if status == "partial" else 0
+        return _report_failures() or (1 if status == "partial" else 0)
 
     if args.command == "backfill":
         update_stock_info()
@@ -49,7 +50,7 @@ def main(argv: list[str] | None = None) -> int:
             backfill_range(args.start, end)
         else:
             backfill(args.days)
-        return 0
+        return _report_failures()
 
     if args.command == "status":
         days = store.trading_days()
@@ -62,6 +63,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"產業別資料：{len(store.load_stock_info())} 檔")
         return 0
     return 0
+
+
+def _report_failures() -> int:
+    if not fetch_mod.failures:
+        return 0
+    print(f"\n有 {len(fetch_mod.failures)} 項抓取失敗（下次執行會自動補抓）：")
+    for f in fetch_mod.failures:
+        print("  -", f)
+    return 1
 
 
 if __name__ == "__main__":
