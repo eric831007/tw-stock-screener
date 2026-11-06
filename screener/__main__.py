@@ -5,6 +5,9 @@
     python -m screener backfill --days 120   # 回補最近 120 個交易日
     python -m screener backfill --start 2004-01-01 --end 2004-12-31  # 回補指定期間
     python -m screener status                # 看目前存了多少資料
+    python -m screener dashboard             # 產生權值股技術分析儀表板
+    python -m screener optimize              # 每支股票各自找最高勝率規則並驗證（寫到 reports/）
+    python -m screener app                   # 開啟桌面分析工具（需要 PySide6、pyqtgraph）
 """
 from __future__ import annotations
 
@@ -31,6 +34,11 @@ def main(argv: list[str] | None = None) -> int:
     p_back.add_argument("--end", type=dt.date.fromisoformat, help="YYYY-MM-DD")
 
     sub.add_parser("status", help="顯示已存資料概況")
+    sub.add_parser("dashboard", help="產生權值股技術分析儀表板 dashboard/index.html")
+    sub.add_parser("app", help="開啟桌面分析工具")
+    p_opt = sub.add_parser("optimize", help="每支股票各自找最高勝率規則，並用沒看過的期間驗證")
+    p_opt.add_argument("--split", type=dt.date.fromisoformat, default=dt.date(2025, 1, 1),
+                       help="切分日 YYYY-MM-DD：之前用來挑規則、之後用來驗證（預設 2025-01-01）")
 
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s",
@@ -40,6 +48,8 @@ def main(argv: list[str] | None = None) -> int:
         day = args.date or today_taipei()
         update_stock_info()
         status = fetch_day(day)
+        fetch_mod.catch_up_optional()     # 融資融券若比排程晚公布，下次執行補上
+        fetch_mod.update_holders()        # 集保股權分散表（每週）
         print(f"{day}：{status}")
         return _report_failures() or (1 if status == "partial" else 0)
 
@@ -51,6 +61,22 @@ def main(argv: list[str] | None = None) -> int:
         else:
             backfill(args.days)
         return _report_failures()
+
+    if args.command == "dashboard":
+        from .dashboard import build
+        print(f"已產生 {build()}")
+        return 0
+
+    if args.command == "app":
+        from .desktop import main as app_main
+        return app_main([sys.argv[0]])
+
+    if args.command == "optimize":
+        from .optimize import run
+        csv_path, md_path = run(args.split)
+        print(f"已產生 {csv_path}")
+        print(f"已產生 {md_path}")
+        return 0
 
     if args.command == "status":
         days = store.trading_days()

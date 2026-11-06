@@ -1,0 +1,4 @@
+# 桌面分析工具額外需要的套件（每日排程不需要）
+-r requirements.txt
+PySide6>=6.6
+pyqtgraph>=0.13

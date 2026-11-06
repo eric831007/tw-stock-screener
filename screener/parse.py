@@ -114,7 +114,9 @@ def price_table(fields: Sequence[str], rows: Sequence[Sequence], market: str) ->
 
 def institutional_table(fields: Sequence[str], rows: Sequence[Sequence]) -> pd.DataFrame:
     """Build the standard three-institution net-buy frame (units: shares)."""
-    h = clean_headers(fields)
+    # 櫃買中心舊版（約 2013～2018 年初）把「買賣超」寫成「淨買」，自營商合計寫成「自營淨買股數」
+    h = [x.replace("淨買", "買賣超") for x in clean_headers(fields)]
+    h = [("自營商" + x[2:]) if x.startswith("自營買賣超") else x for x in h]
     col = {
         "code": find_column(h, contains=["代號"], what="代號"),
         # Foreign & mainland investors, excluding foreign dealers.
@@ -162,3 +164,63 @@ def pick_table(payload: dict, must_have: Sequence[str]) -> tuple[list, list] | N
         if all(any(m in x for x in h) for m in must_have) and t.get("data"):
             return t["fields"], t["data"]
     return None
+
+
+MARGIN_COLUMNS = ["code", "margin_buy", "margin_sell", "margin_bal", "short_sell", "short_buy", "short_bal", "offset"]
+
+
+def margin_table(fields: Sequence[str], rows: Sequence[Sequence]) -> pd.DataFrame:
+    """融資融券（單位：張）。
+
+    上市（MI_MARGN）的欄名重複：前一組「買進／賣出／今日餘額」是融資、後一組是融券；
+    上櫃（margin/balance）的欄名不重複：資買、資賣、資餘額、券賣、券買、券餘額。
+    """
+    h = clean_headers(fields)
+    if "資餘額" in h:   # 上櫃
+        col = {"code": find_column(h, contains=["代號"], what="代號"),
+               "margin_buy": h.index("資買"), "margin_sell": h.index("資賣"), "margin_bal": h.index("資餘額"),
+               "short_sell": h.index("券賣"), "short_buy": h.index("券買"), "short_bal": h.index("券餘額"),
+               "offset": find_column(h, contains=["資券相抵"], what="資券相抵")}
+    else:              # 上市：同名欄位依出現順序分成融資、融券
+        def nth(name: str, n: int) -> int:
+            idx = [i for i, x in enumerate(h) if x == name]
+            if len(idx) <= n:
+                raise SchemaError(f"融資融券表找不到第 {n + 1} 個「{name}」欄位：{h}")
+            return idx[n]
+        col = {"code": find_column(h, contains=["代號"], what="代號"),
+               "margin_buy": nth("買進", 0), "margin_sell": nth("賣出", 0), "margin_bal": nth("今日餘額", 0),
+               "short_buy": nth("買進", 1), "short_sell": nth("賣出", 1), "short_bal": nth("今日餘額", 1),
+               "offset": find_column(h, contains=["資券互抵"], what="資券互抵")}
+    records = [{k: (str(r[i]).strip() if k == "code" else to_number(r[i])) for k, i in col.items()} for r in rows]
+    return filter_codes(pd.DataFrame.from_records(records, columns=MARGIN_COLUMNS))
+
+
+HOLDER_COLUMNS = ["code", "holders", "holders_1000", "pct_1000", "pct_400", "pct_le50"]
+
+
+def holders_table(text: str) -> tuple[str, pd.DataFrame]:
+    """集保股權分散表（opendata 1-5，CSV）→（資料日期 YYYY-MM-DD, 每檔摘要）。
+
+    持股分級：1～8 級＝50 張以下（散戶），12～15 級＝400 張以上（大戶），15 級＝1,000 張以上（千張大戶），
+    17 級＝合計。pct_* 是占集保庫存的百分比。
+    """
+    import io
+    raw = pd.read_csv(io.StringIO(text), dtype=str)
+    raw.columns = clean_headers(raw.columns)
+    date_col = find_column(list(raw.columns), contains=["日期"], what="資料日期")
+    code_col = find_column(list(raw.columns), contains=["代號"], what="證券代號")
+    lvl_col = find_column(list(raw.columns), contains=["分級"], what="持股分級")
+    ppl_col = find_column(list(raw.columns), contains=["人數"], what="人數")
+    pct_col = find_column(list(raw.columns), contains=["比例"], what="占集保庫存數比例")
+    df = pd.DataFrame({"code": raw.iloc[:, code_col].str.strip(), "lvl": pd.to_numeric(raw.iloc[:, lvl_col]),
+                       "people": pd.to_numeric(raw.iloc[:, ppl_col]), "pct": pd.to_numeric(raw.iloc[:, pct_col])})
+    day = str(raw.iloc[0, date_col]).strip()
+    day = f"{day[:4]}-{day[4:6]}-{day[6:8]}"
+    piv = df.pivot_table(index="code", columns="lvl", values=["people", "pct"], aggfunc="sum")
+    pct = piv["pct"].reindex(columns=range(1, 18), fill_value=0)
+    ppl = piv["people"].reindex(columns=range(1, 18), fill_value=0)
+    out = pd.DataFrame({"code": pct.index, "holders": ppl[17].to_numpy(), "holders_1000": ppl[15].to_numpy(),
+                        "pct_1000": pct[15].to_numpy(), "pct_400": pct[[12, 13, 14, 15]].sum(axis=1).to_numpy(),
+                        "pct_le50": pct[list(range(1, 9))].sum(axis=1).to_numpy()})
+    out = filter_codes(out[HOLDER_COLUMNS])
+    return day, out[~out["code"].str.startswith("000")].reset_index(drop=True)   # 000 開頭不是股票／ETF

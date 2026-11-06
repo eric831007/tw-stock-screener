@@ -16,3 +16,19 @@ report:
 overheat:                     # 過熱警示
   rsi_above: 80
   return_5d_above_pct: 25
+  oversold_rsi_below: 20      # 趨勢強弱：RSI 低於此值算超賣，最低只給「中性」
+
+watchlist:                    # 權值股技術分析儀表板
+  top_market_cap: 50          # 上市市值前幾大（接近台灣 50 成分股）
+  my_etfs: ["0050", "0056", "00878", "00919"]   # 自己持有、一定要看的
+  extra: []                   # 想額外加入的股票代號
+
+trading:                      # 買賣規則（儀表板的操作建議與交易紀錄）
+  mode: winrate               # winrate＝高勝率（季線之上 RSI(3)<25 買、RSI(3)>70 或滿 20 天賣，不看下面其他條件）
+                              # auto＝依牛熊切換（牛市用 scale，其他用 all_in）；all_in＝全進全出；scale＝低點加倉、高點賣一半
+  regime_from: "0050"         # 牛熊用哪一檔的年線判斷；填 self 就每檔用自己的年線
+  max_units: 3                # scale 模式最多加到幾份
+  stop_loss_pct: 8            # 收盤比平均成本低幾 % 就全部賣出
+  ma_entry_filter: true       # 下跌還沒結束不買：買進／加碼還要 10 日線止跌（比 3 天前高）
+  ma10_turn_days: 3           # 10 日線比幾天前高，算「止跌」
+  ma_hold_in_uptrend: false   # 上漲還沒結束不賣：10 日線在月線之上時，區域高點不賣（跌破 10 日線、停損照賣）

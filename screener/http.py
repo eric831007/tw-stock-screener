@@ -25,6 +25,15 @@ _last_call = 0.0
 
 
 def get_json(url: str, params: dict | None = None):
+    return _get(url, params, as_json=True)
+
+
+def get_text(url: str, params: dict | None = None, encoding: str = "utf-8-sig") -> str | None:
+    """同 get_json，但回傳文字（例如 CSV）。"""
+    return _get(url, params, as_json=False, encoding=encoding)
+
+
+def _get(url: str, params: dict | None, as_json: bool, encoding: str = "utf-8"):
     global _last_call
     error: Exception | None = None
     for attempt in range(1, RETRIES + 1):
@@ -35,10 +44,12 @@ def get_json(url: str, params: dict | None = None):
         try:
             resp = _session.get(url, params=params, timeout=TIMEOUT)
             resp.raise_for_status()
+            if not as_json:
+                resp.encoding = encoding
             text = resp.text.strip()
             if not text:
                 return None  # some endpoints answer an empty body on holidays
-            return resp.json()
+            return resp.json() if as_json else text
         except (requests.RequestException, ValueError) as exc:
             error = exc
             log.warning("第 %d 次請求失敗 %s：%s", attempt, url, exc)

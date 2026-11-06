@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>權值股技術分析</title>
+<style>
+:root {
+  --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66; --faint: #9a9a94;
+  --line: #e4e3df; --grid: #efeeea; --accent: #2f6fdb; --accent-bg: #e8f0fc;
+  --up: #d93b3b; --down: #1f9d55; --warn-bg: #fff4dc; --warn: #8a5a00; --mark: #d68a00;
+  --sell-bg: #e6f4ec; --sell: #17623a; --sellmark: #1f9d55;
+  --ma5: #e0a100; --ma10: #9b51e0; --ma20: #2f6fdb; --ma60: #0f9d8a; --ma120: #c2410c; --ma240: #6b7280;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #161615; --panel: #1f1f1e; --text: #ecebe7; --muted: #a3a29c; --faint: #75746f;
+    --line: #34332f; --grid: #2a2926; --accent: #6ea0ff; --accent-bg: #1f2b44;
+    --up: #f0625f; --down: #3ccf7f; --warn-bg: #3a2e14; --warn: #f2c46b; --mark: #f2b234;
+    --sell-bg: #15301f; --sell: #7fe0a6; --sellmark: #3ccf7f;
+    --ma240: #b7b7b0; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; font-family: -apple-system, "Segoe UI", "Microsoft JhengHei", "PingFang TC", sans-serif;
+  background: var(--bg); color: var(--text); font-size: 14px; }
+header { display: flex; align-items: baseline; gap: 16px; padding: 14px 20px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+header .meta { color: var(--muted); font-size: 12px; }
+.layout { display: grid; grid-template-columns: 270px minmax(0, 1fr); min-height: calc(100vh - 52px); }
+aside { border-right: 1px solid var(--line); background: var(--panel); overflow-y: auto; max-height: calc(100vh - 52px); position: sticky; top: 0; }
+aside .tools { padding: 10px 12px; border-bottom: 1px solid var(--line); display: flex; gap: 8px; position: sticky; top: 0; background: var(--panel); z-index: 1; }
+aside input, aside select { font: inherit; font-size: 13px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); min-width: 0; }
+aside input { flex: 1; }
+.group { padding: 10px 12px 4px; font-size: 12px; color: var(--muted); font-weight: 600; }
+.item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; padding: 7px 12px; cursor: pointer; border-left: 3px solid transparent; }
+.item:hover { background: var(--bg); }
+.item.active { background: var(--accent-bg); border-left-color: var(--accent); }
+.item .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item .cd { color: var(--faint); font-size: 12px; margin-left: 4px; }
+.item .px { text-align: right; font-variant-numeric: tabular-nums; }
+.item .chg { text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; }
+.item .sig { font-size: 11px; color: var(--warn); }
+.item .sig .s { color: var(--sell); margin-left: 6px; }
+h4 { font-size: 13px; margin: 14px 0 6px; color: var(--muted); font-weight: 600; }
+.up { color: var(--up); } .down { color: var(--down); }
+main { padding: 16px 20px 40px; min-width: 0; }
+.head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.head h2 { margin: 0; font-size: 22px; font-weight: 600; }
+.head .price { font-size: 22px; font-variant-numeric: tabular-nums; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 4px; }
+.chip { font-size: 12px; padding: 3px 9px; border-radius: 999px; background: var(--warn-bg); color: var(--warn); }
+.chip.sell { background: var(--sell-bg); color: var(--sell); }
+.chip.muted { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+.toolbar { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 12px 0 8px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { font: inherit; font-size: 13px; padding: 5px 14px; border: 0; background: var(--panel); color: var(--text); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button.on { background: var(--accent); color: #fff; }
+.toggle { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--muted); cursor: pointer; user-select: none; }
+.toggle input { margin: 0; }
+.swatch { width: 10px; height: 3px; display: inline-block; border-radius: 2px; }
+.chartbox { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 6px 0 0; }
+canvas { display: block; width: 100%; touch-action: none; cursor: crosshair; }
+.hint { color: var(--faint); font-size: 12px; margin: 6px 2px 0; }
+section { margin-top: 26px; }
+section h3 { font-size: 16px; margin: 0 0 4px; font-weight: 600; }
+section p.lead { margin: 0 0 10px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+table { border-collapse: collapse; width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; font-size: 13px; }
+th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+th { color: var(--muted); font-weight: 600; background: var(--bg); }
+th:first-child, td:first-child { text-align: left; }
+tr:last-child td { border-bottom: 0; }
+td.base { color: var(--muted); }
+.tablewrap { overflow-x: auto; }
+dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0; font-size: 13px; }
+dt { font-weight: 600; } dd { margin: 0; color: var(--muted); }
+.vbox { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 18px; align-items: start; margin: 12px 0 4px; padding: 12px 16px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); border-left: 6px solid var(--muted); }
+.vbox.l2, .vbox.l1 { border-left-color: var(--up); } .vbox.l-1, .vbox.l-2 { border-left-color: var(--down); }
+.vlabel { font-size: 18px; font-weight: 700; line-height: 1.1; }
+.vlabel small { display: block; font-size: 12px; font-weight: 400; color: var(--muted); margin-top: 4px; }
+.vl2, .vl1 { color: var(--up); } .vl-1, .vl-2 { color: var(--down); } .vl0 { color: var(--muted); }
+.vchecks { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; }
+.vchecks span { white-space: nowrap; } .vchecks .ok { color: var(--up); } .vchecks .no { color: var(--down); } .vchecks .na { color: var(--faint); }
+.vnote { grid-column: 2; font-size: 12px; color: var(--muted); }
+.badge { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 4px; margin-right: 6px; font-weight: 600; }
+.badge.b2 { background: var(--up); color: #fff; } .badge.b1 { color: var(--up); border: 1px solid var(--up); }
+.badge.b-2 { background: var(--down); color: #fff; } .badge.b-1 { color: var(--down); border: 1px solid var(--down); }
+.badge.b0 { color: var(--muted); border: 1px solid var(--line); }
+.abox { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 18px; align-items: center; margin: 12px 0 0; padding: 14px 18px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); border-left: 8px solid var(--muted); }
+.abox.buy, .abox.add { border-left-color: var(--up); } .abox.sell, .abox.half { border-left-color: var(--down); } .abox.hold { border-left-color: var(--accent); }
+.alabel { font-size: 30px; font-weight: 700; line-height: 1.1; }
+.alabel small { display: block; font-size: 12px; font-weight: 400; color: var(--muted); margin-top: 4px; }
+.alabel.buy, .alabel.add { color: var(--up); } .alabel.sell, .alabel.half { color: var(--down); } .alabel.hold { color: var(--accent); } .alabel.flat { color: var(--muted); }
+.alines { font-size: 14px; line-height: 1.7; }
+.badge.buy, .badge.add { background: var(--up); color: #fff; } .badge.sell, .badge.half { background: var(--down); color: #fff; }
+.badge.hold { color: var(--accent); border: 1px solid var(--accent); } .badge.flat { color: var(--muted); border: 1px solid var(--line); }
+.stats { display: flex; gap: 22px; flex-wrap: wrap; margin: 0 0 10px; font-size: 13px; color: var(--muted); }
+.stats b { font-size: 18px; color: var(--text); display: block; font-variant-numeric: tabular-nums; }
+.chip.regime { background: var(--accent-bg); color: var(--accent); }
+.note { margin-top: 26px; padding: 12px 14px; border-radius: 10px; background: var(--warn-bg); color: var(--warn); font-size: 13px; line-height: 1.6; }
+@media (max-width: 760px) { .layout { grid-template-columns: 1fr; } aside { max-height: 260px; position: static; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>權值股技術分析</h1>
+  <span class="meta" id="meta"></span>
+</header>
+<div class="layout">
+  <aside>
+    <div class="tools">
+      <input id="q" placeholder="搜尋代號或名稱">
+      <select id="sort"><option value="rank">依權重</option><option value="action">依操作建議</option><option value="verdict">依趨勢強弱</option><option value="score">依買點訊號</option><option value="sell">依賣點訊號</option><option value="chg">依漲跌幅</option></select>
+    </div>
+    <div id="list"></div>
+  </aside>
+  <main>
+    <div class="head">
+      <h2 id="title"></h2>
+      <span class="price" id="price"></span>
+      <span id="chg"></span>
+    </div>
+    <div class="abox" id="abox"></div>
+    <div class="vbox" id="vbox"></div>
+    <div class="chips" id="chips"></div>
+    <div class="toolbar">
+      <div class="seg" id="tf"><button data-tf="D" class="on">日線</button><button data-tf="W">週線</button><button data-tf="M">月線</button></div>
+      <div id="maToggles" style="display:flex;gap:12px;flex-wrap:wrap"></div>
+      <label class="toggle"><input type="checkbox" id="bb">布林通道</label>
+      <label class="toggle"><input type="checkbox" id="trades" checked><b style="color:var(--up)">買</b>/<b style="color:var(--down)">賣</b>交易</label>
+      <label class="toggle"><input type="checkbox" id="marks"><span style="color:var(--mark)">▲</span>買點</label>
+      <label class="toggle"><input type="checkbox" id="smarks"><span style="color:var(--sellmark)">▼</span>賣點</label>
+      <span style="color:var(--line)">|</span>
+      <label class="toggle"><input type="checkbox" class="pane" value="macd" checked>MACD</label>
+      <label class="toggle"><input type="checkbox" class="pane" value="rsi" checked>RSI</label>
+      <label class="toggle"><input type="checkbox" class="pane" value="kd" checked>KD</label>
+    </div>
+    <div class="chartbox"><canvas id="cv"></canvas></div>
+    <p class="hint">滑鼠滾輪放大縮小、按住拖曳左右移動。<b>買</b>／<b>賣</b>＝依買賣規則的實際成交日（訊號隔天開盤），虛線連起同一筆交易並標出報酬；▲▼ 是個別型態訊號（預設隱藏）；價格圖底部色帶＝趨勢強弱（紅＝偏多，綠＝偏空，越深越強）。年線＝240 日均線，季線＝60 日均線。</p>
+
+    <section>
+      <h3>交易紀錄（照買賣規則操作的結果）</h3>
+      <div class="stats" id="tstats"></div>
+      <div class="tablewrap"><table id="tlog"></table></div>
+    </section>
+
+    <section>
+      <h3>買賣點訊號的歷史表現</h3>
+      <p class="lead" id="btLead"></p>
+      <div class="tablewrap"><table id="bt"></table></div>
+    </section>
+
+    <section>
+      <h3>買賣規則</h3>
+      <p class="lead" id="trule"></p>
+      <h3 style="margin-top:16px">趨勢強弱怎麼算</h3>
+      <p class="lead" id="vrule"></p>
+    </section>
+
+    <section>
+      <h3>訊號說明</h3>
+      <h4>買點 ▲</h4><dl id="legend"></dl>
+      <h4>賣點 ▼</h4><dl id="legendSell"></dl>
+      <h4>均線交叉（僅供參考，不算進底部訊號、趨勢分數與買賣規則）</h4><dl id="legendMa"></dl>
+    </section>
+
+    <div class="note">技術指標只描述過去的價格型態，不能保證未來的漲跌。表中的比例來自歷史資料，樣本少於 10 次時參考價值很低。股價未還原除權息，配息多的 ETF（如 0056、00878、00919）在除息日會出現向下跳空，可能誤觸訊號。實際買賣前請搭配基本面、新聞與自己的判斷。<b>本頁所有買賣建議都是依固定規則算出來的，不構成投資建議。</b></div>
+  </main>
+</div>
+
+<script>
+const DATA = /*__DATA__*/null;
+
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmt = (v, d = 2) => v == null ? '—' : Number(v).toLocaleString('zh-TW', { minimumFractionDigits: d, maximumFractionDigits: d });
+const pct = v => v == null ? '—' : (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + '%';
+const MA = { D: [5, 10, 20, 60, 120, 240], W: [5, 10, 20, 52], M: [3, 6, 12, 24] };
+const MA_LABEL = { D: { 5: '5日', 10: '10日', 20: '月線', 60: '季線', 120: '半年線', 240: '年線' }, W: { 5: '5週', 10: '10週', 20: '20週', 52: '52週' }, M: { 3: '3月', 6: '6月', 12: '12月', 24: '24月' } };
+const MA_COLOR_KEYS = ['--ma5', '--ma10', '--ma20', '--ma60', '--ma120', '--ma240'];
+const DEFAULT_ON = { D: [5, 20, 60, 240], W: [5, 20, 52], M: [6, 12, 24] };
+const VIEW = { D: Infinity, W: Infinity, M: Infinity };  // 預設顯示全部資料，用滾輪放大看細節
+const VERDICT = { 2: '強多', 1: '偏多', 0: '中性', '-1': '偏空', '-2': '強空' };
+const ACT_ORDER = { buy: 0, add: 1, sell: 2, half: 3, hold: 4, flat: 5 };
+const REASON = { bottom: '底部確認', pullback: '多頭回檔再轉強', take_profit: '區域高點', below_ma10: '跌破10日線', stop_loss: '停損' };
+const RG = { b: 'bull', x: 'bear', r: 'range', u: 'unknown' };
+
+const state = { idx: 0, tf: 'D', maOn: { D: new Set(DEFAULT_ON.D), W: new Set(DEFAULT_ON.W), M: new Set(DEFAULT_ON.M) },
+  bb: false, trades: true, marks: false, smarks: false, panes: new Set(['macd', 'rsi', 'kd']), start: 0, count: 120, hover: -1 };
+
+/* ---------- header & list ---------- */
+document.getElementById('meta').textContent =
+  `資料 ${DATA.range[0]} ～ ${DATA.range[1]}（${DATA.tradingDays} 個交易日）· 更新於 ${DATA.generated} · 權值股排序依據：${DATA.basis}`;
+
+function last(s) { const c = s.D.close; return c[c.length - 1]; }
+function change(s) { const c = s.D.close; return c.length > 1 ? c[c.length - 1] / c[c.length - 2] - 1 : null; }
+
+function renderList() {
+  const q = document.getElementById('q').value.trim().toLowerCase();
+  const sort = document.getElementById('sort').value;
+  const list = document.getElementById('list');
+  list.innerHTML = '';
+  const groups = [...new Set(DATA.stocks.map(s => s.group))];
+  for (const g of groups) {
+    let items = DATA.stocks.map((s, i) => ({ s, i })).filter(x => x.s.group === g &&
+      (!q || x.s.code.includes(q) || x.s.name.toLowerCase().includes(q)));
+    if (sort === 'action') items.sort((a, b) => ACT_ORDER[a.s.action.code] - ACT_ORDER[b.s.action.code]);
+    if (sort === 'verdict') items.sort((a, b) => b.s.verdict.level - a.s.verdict.level || b.s.verdict.total - a.s.verdict.total);
+    if (sort === 'score') items.sort((a, b) => b.s.score - a.s.score);
+    if (sort === 'sell') items.sort((a, b) => b.s.sell - a.s.sell);
+    if (sort === 'chg') items.sort((a, b) => (change(b.s) ?? -9) - (change(a.s) ?? -9));
+    if (!items.length) continue;
+    const h = document.createElement('div'); h.className = 'group'; h.textContent = `${g}（${items.length}）`; list.appendChild(h);
+    for (const { s, i } of items) {
+      const ch = change(s);
+      const el = document.createElement('div');
+      el.className = 'item' + (i === state.idx ? ' active' : '');
+      el.innerHTML = `<div class="nm">${s.name}<span class="cd">${s.code}</span></div><div class="px">${fmt(last(s))}</div>` +
+        `<div class="sig"><span class="badge ${s.action.code}">${s.action.label}</span>${s.score ? (s.score >= 2 ? '● 買點 ' : '○ 買點 ') + s.score : ''}${s.sell ? `<span class="s">${s.sell >= 2 ? '● 賣點 ' : '○ 賣點 '}${s.sell}</span>` : ''}</div>` +
+        `<div class="chg ${ch >= 0 ? 'up' : 'down'}">${pct(ch)}</div>`;
+      el.onclick = () => { state.idx = i; renderAll(); };
+      list.appendChild(el);
+    }
+  }
+}
+document.getElementById('q').oninput = renderList;
+document.getElementById('sort').onchange = renderList;
+
+/* ---------- stock header, toolbar ---------- */
+function renderHead() {
+  const s = DATA.stocks[state.idx];
+  const ch = change(s), c = s.D.close, n = c.length;
+  document.getElementById('title').textContent = `${s.name} ${s.code}`;
+  document.getElementById('price').textContent = fmt(last(s));
+  const chg = document.getElementById('chg');
+  chg.className = ch >= 0 ? 'up' : 'down';
+  chg.textContent = ch == null ? '' : `${ch >= 0 ? '▲' : '▼'} ${fmt(Math.abs(c[n - 1] - c[n - 2]))}（${pct(ch)}）`;
+  renderAction(s);
+  renderVerdict(s);
+  const chips = document.getElementById('chips');
+  chips.innerHTML = '';
+  { const T = DATA.trading, src = T.regimeFrom === 'self' ? '自己的年線' : T.regimeFrom + ' 的年線';
+    const e = document.createElement('span'); e.className = 'chip regime';
+    e.textContent = `${T.regimes[s.regime]}（依 ${src}）· 做法：${T.modes[s.modeNow]}${T.mode === 'auto' ? '（自動切換）' : ''}`; chips.appendChild(e);
+    const m = document.createElement('span'); m.className = 'chip ' + (s.align === 'bear' ? 'sell' : s.align === 'bull' ? '' : 'muted');
+    m.textContent = '均線' + DATA.alignments[s.align].split('：')[0].replace(/^均線/, ''); m.title = DATA.alignments[s.align]; chips.appendChild(m); }
+  const ma240 = s.D.ma240[n - 1], ma60 = s.D.ma60[n - 1];
+  const add = (t, cls) => { const e = document.createElement('span'); e.className = 'chip ' + (cls || ''); e.textContent = t; chips.appendChild(e); };
+  if (s.today.length) s.today.forEach(k => add((DATA.signals[k].side === 'buy' ? '▲ ' : '▼ ') + '近 5 日：' + DATA.signals[k].name, DATA.signals[k].side === 'sell' ? 'sell' : ''));
+  else add('近 5 日沒有買賣點訊號', 'muted');
+  add(ma240 == null ? '年線：資料不足 240 天' : (c[n - 1] >= ma240 ? '站上年線' : '跌破年線'), 'muted');
+  if (ma60 != null) add(c[n - 1] >= ma60 ? '站上季線' : '跌破季線', 'muted');
+}
+
+function renderAction(s) {
+  const a = s.action, box = document.getElementById('abox');
+  box.className = 'abox ' + a.code;
+  const sub = { buy: '下一個交易日開盤', add: '下一個交易日開盤', half: '下一個交易日開盤', sell: '下一個交易日開盤',
+    hold: '持有中，還沒到賣點', flat: '沒有持股，還沒到買點' }[a.code];
+  box.innerHTML = `<div class="alabel ${a.code}">${a.label}<small>${sub}</small></div><div class="alines">${a.lines.join('<br>')}</div>`;
+}
+
+function renderVerdict(s) {
+  const v = s.verdict, box = document.getElementById('vbox');
+  box.className = 'vbox l' + v.level;
+  const pt = n => (n > 0 ? '+' : '') + n;
+  const checks = v.checks.map(c => `<span class="${c.pt > 0 ? 'ok' : c.pt < 0 ? 'no' : 'na'}">${c.pt > 0 ? '✓' : c.pt < 0 ? '✗' : '–'} ${c.name}${c.pt ? '' : '（資料不足）'}</span>`);
+  checks.push(`<span class="${v.buyPts ? 'ok' : 'na'}">▲ 近 5 日買點：${v.buys.length ? v.buys.join('、') : '無'}（${pt(v.buyPts)}）</span>`);
+  checks.push(`<span class="${v.sellPts ? 'no' : 'na'}">▼ 近 5 日賣點：${v.sells.length ? v.sells.join('、') : '無'}（${pt(-v.sellPts)}）</span>`);
+  const capped = v.capped === '過熱' ? '⚠ 分數偏多，但短線過熱（RSI 或 5 日漲幅過高），降為中性。'
+    : v.capped === '超賣' ? '⚠ 分數偏空，但已經超賣（RSI 很低），升為中性。' : '';
+  box.innerHTML = `<div class="vlabel vl${v.level}">趨勢：${v.label}<small>趨勢分數 ${pt(v.total)}（範圍 −8～+8）· 已持續 ${v.streak} 天</small></div>` +
+    `<div class="vchecks">${checks.join('')}</div>` + (capped ? `<div class="vnote">${capped}</div>` : '');
+}
+
+function renderToolbar() {
+  const box = document.getElementById('maToggles');
+  box.innerHTML = '';
+  MA[state.tf].forEach((p, j) => {
+    const l = document.createElement('label'); l.className = 'toggle';
+    const on = state.maOn[state.tf].has(p);
+    l.innerHTML = `<input type="checkbox" ${on ? 'checked' : ''}><span class="swatch" style="background:${css(MA_COLOR_KEYS[j])}"></span>${MA_LABEL[state.tf][p]}`;
+    l.querySelector('input').onchange = e => { e.target.checked ? state.maOn[state.tf].add(p) : state.maOn[state.tf].delete(p); draw(); };
+    box.appendChild(l);
+  });
+  document.querySelectorAll('#tf button').forEach(b => b.classList.toggle('on', b.dataset.tf === state.tf));
+}
+document.querySelectorAll('#tf button').forEach(b => b.onclick = () => { state.tf = b.dataset.tf; resetView(); renderToolbar(); draw(); });
+document.getElementById('bb').onchange = e => { state.bb = e.target.checked; draw(); };
+document.getElementById('trades').onchange = e => { state.trades = e.target.checked; draw(); };
+document.getElementById('marks').onchange = e => { state.marks = e.target.checked; draw(); };
+document.getElementById('smarks').onchange = e => { state.smarks = e.target.checked; draw(); };
+document.querySelectorAll('.pane').forEach(c => c.onchange = () => { c.checked ? state.panes.add(c.value) : state.panes.delete(c.value); draw(); });
+
+/* ---------- chart ---------- */
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const AXIS_W = 70, LEFT = 10, TOP = 6, XAXIS_H = 24;
+
+function series() { return DATA.stocks[state.idx][state.tf]; }
+function resetView() {
+  const n = series().t.length;
+  state.count = Math.min(VIEW[state.tf], n);
+  state.start = Math.max(0, n - state.count);
+  state.hover = -1;
+}
+
+function layout(width) {
+  const panes = [{ key: 'price', h: 330 }, { key: 'vol', h: 80 }];
+  for (const k of ['macd', 'rsi', 'kd']) if (state.panes.has(k)) panes.push({ key: k, h: 100 });
+  let y = TOP;
+  for (const p of panes) { p.y = y; y += p.h + 8; }
+  return { panes, height: y + XAXIS_H, plotW: width - AXIS_W - LEFT };
+}
+
+function draw() {
+  const s = series(), n = s.t.length;
+  const width = cv.parentElement.clientWidth;
+  const L = layout(width);
+  const dpr = window.devicePixelRatio || 1;
+  cv.style.height = L.height + 'px';
+  cv.width = width * dpr; cv.height = L.height * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, width, L.height);
+  ctx.font = '11px -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif';
+
+  const a = state.start, b = Math.min(n, a + state.count);
+  const bw = L.plotW / state.count;
+  const xOf = i => LEFT + (i - a + 0.5) * bw;
+  const C = { up: css('--up'), down: css('--down'), grid: css('--grid'), text: css('--muted'), line: css('--line'), mark: css('--mark'), accent: css('--accent'), fg: css('--text') };
+
+  const range = (keys, pad = 0.06) => {
+    let lo = Infinity, hi = -Infinity;
+    for (let i = a; i < b; i++) for (const k of keys) { const v = s[k] && s[k][i]; if (v != null) { lo = Math.min(lo, v); hi = Math.max(hi, v); } }
+    if (!isFinite(lo)) { lo = 0; hi = 1; }
+    if (hi === lo) { hi += 1; lo -= 1; }
+    const p = (hi - lo) * pad; return [lo - p, hi + p];
+  };
+  const scaler = (p, lo, hi) => v => p.y + p.h - (v - lo) / (hi - lo) * p.h;
+  const gridY = (p, lo, hi, ticks, f) => {
+    ctx.fillStyle = C.text; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    const Y = scaler(p, lo, hi);
+    for (const v of ticks) { const y = Y(v); if (y < p.y || y > p.y + p.h) continue;
+      ctx.strokeStyle = C.grid; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(LEFT, y); ctx.lineTo(LEFT + L.plotW, y); ctx.stroke();
+      ctx.fillText(f(v), LEFT + L.plotW + 6, y); }
+  };
+  const niceTicks = (lo, hi, count = 5) => {
+    const raw = (hi - lo) / count, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+    const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(st => st >= raw) || raw;
+    const out = []; for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) out.push(+v.toFixed(6)); return out;
+  };
+  const line = (key, Y, color, width = 1.3, dash) => {
+    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.setLineDash(dash || []); ctx.beginPath(); let pen = false;
+    for (let i = a; i < b; i++) { const v = s[key][i]; if (v == null) { pen = false; continue; }
+      const x = xOf(i), y = Y(v); pen ? ctx.lineTo(x, y) : ctx.moveTo(x, y); pen = true; }
+    ctx.stroke(); ctx.setLineDash([]);
+  };
+  const label = (p, parts) => {
+    let x = LEFT + 4; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    for (const [t, c] of parts) { ctx.fillStyle = c; ctx.fillText(t, x, p.y + 2); x += ctx.measureText(t).width + 10; }
+  };
+  const hi = state.hover >= a && state.hover < b ? state.hover : b - 1;
+
+  for (const p of L.panes) {
+    ctx.strokeStyle = C.line; ctx.lineWidth = 1; ctx.strokeRect(LEFT + 0.5, p.y + 0.5, L.plotW, p.h);
+    if (p.key === 'price') {
+      const maKeys = MA[state.tf].filter(m => state.maOn[state.tf].has(m)).map(m => 'ma' + m);
+      const [lo, hiV] = range(['high', 'low', ...maKeys, ...(state.bb ? ['bb_up', 'bb_low'] : [])]);
+      const Y = scaler(p, lo, hiV);
+      gridY(p, lo, hiV, niceTicks(lo, hiV), v => fmt(v, v < 100 ? 2 : 1));
+      if (state.bb) { line('bb_up', Y, C.text, 1, [4, 3]); line('bb_mid', Y, C.text, 1, [2, 3]); line('bb_low', Y, C.text, 1, [4, 3]); }
+      const cw = Math.max(1, Math.min(14, bw * 0.7));
+      for (let i = a; i < b; i++) {
+        const o = s.open[i], h = s.high[i], l = s.low[i], c = s.close[i]; if (c == null) continue;
+        const col = c >= o ? C.up : C.down, x = xOf(i);
+        ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, Y(h)); ctx.lineTo(x, Y(l)); ctx.stroke();
+        const y1 = Y(Math.max(o, c)), y2 = Y(Math.min(o, c));
+        ctx.fillRect(x - cw / 2, y1, cw, Math.max(1, y2 - y1));
+      }
+      MA[state.tf].forEach((m, j) => { if (state.maOn[state.tf].has(m)) line('ma' + m, Y, css(MA_COLOR_KEYS[j]), 1.4); });
+      if (state.tf === 'D') {
+        for (const mk of DATA.stocks[state.idx].marks) { if (mk.i < a || mk.i >= b) continue;
+          const x = xOf(mk.i);
+          if (mk.side === 'buy' && state.marks) { const y = Y(s.low[mk.i]) + 6; ctx.fillStyle = C.mark;
+            ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 5, y + 8); ctx.lineTo(x + 5, y + 8); ctx.closePath(); ctx.fill(); }
+          if (mk.side === 'sell' && state.smarks) { const y = Y(s.high[mk.i]) - 6; ctx.fillStyle = css('--sellmark');
+            ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 5, y - 8); ctx.lineTo(x + 5, y - 8); ctx.closePath(); ctx.fill(); }
+        }
+      }
+      if (state.tf === 'D' && s.v) {  // 價格圖底部的趨勢強弱色帶
+        for (let i = a; i < b; i++) { const lv = s.v[i]; if (!lv) continue;
+          ctx.fillStyle = lv > 0 ? C.up : C.down; ctx.globalAlpha = Math.abs(lv) === 2 ? 0.85 : 0.35;
+          ctx.fillRect(xOf(i) - bw / 2, p.y + p.h - 5, bw, 5); }
+        ctx.globalAlpha = 1;
+      }
+      if (state.tf === 'D' && state.trades) {
+        const tag = (x, y, text, color, below) => {
+          ctx.font = 'bold 12px -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif';
+          const w = ctx.measureText(text).width + 8, h = 17, top = below ? y + 4 : y - 4 - h;
+          ctx.fillStyle = color; ctx.fillRect(x - w / 2, top, w, h);
+          ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, x, top + h / 2 + 0.5);
+          ctx.font = '11px -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif';
+        };
+        for (const r of DATA.stocks[state.idx].rounds) {
+          const e = r.e == null ? n - 1 : r.e;
+          if (e < a || r.s >= b) continue;
+          const col = r.ret >= 0 ? C.up : C.down;
+          ctx.strokeStyle = col; ctx.lineWidth = 1.2; ctx.setLineDash([5, 4]); ctx.beginPath();
+          r.acts.forEach((x, j) => { const X = xOf(x.i), Yv = Y(x.px); j ? ctx.lineTo(X, Yv) : ctx.moveTo(X, Yv); });
+          if (r.e == null) ctx.lineTo(xOf(e), Y(s.close[e]));
+          ctx.stroke(); ctx.setLineDash([]);
+          for (const x of r.acts) { if (x.i < a || x.i >= b) continue;
+            if (x.t === 'buy') tag(xOf(x.i), Y(s.low[x.i]), '買', C.up, true);
+            if (x.t === 'add') tag(xOf(x.i), Y(s.low[x.i]), '加', C.up, true);
+            if (x.t === 'half') tag(xOf(x.i), Y(s.high[x.i]), '賣½', C.down, false);
+            if (x.t === 'exit') tag(xOf(x.i), Y(s.high[x.i]), '清 ' + pct(r.ret), C.down, false); }
+          if (r.e == null && e < b) { ctx.fillStyle = col; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'; ctx.fillText('持有中 ' + pct(r.ret), xOf(e) - 6, Y(s.high[e]) - 6); }
+        }
+      }
+      if (state.tf === 'D') {  // 資料缺口：虛線標出，缺口前後的指標分開計算
+        for (const g of DATA.stocks[state.idx].gaps || []) { if (g < a || g >= b) continue;
+          const x = xOf(g) - bw / 2; ctx.strokeStyle = C.text; ctx.setLineDash([2, 3]); ctx.beginPath();
+          ctx.moveTo(x, p.y); ctx.lineTo(x, p.y + p.h); ctx.stroke(); ctx.setLineDash([]);
+          ctx.fillStyle = C.text; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+          ctx.fillText(`資料缺口（${s.t[g - 1]} → ${s.t[g]}）`, x + 4, p.y + 34); }
+      }
+      if (state.tf === 'D' && s.rg) {  // 價格圖頂端的牛熊色帶
+        for (let i = a; i < b; i++) { const g = s.rg[i]; if (g === 'u') continue;
+          ctx.fillStyle = g === 'b' ? C.up : g === 'x' ? C.down : C.text; ctx.globalAlpha = g === 'r' ? 0.25 : 0.5;
+          ctx.fillRect(xOf(i) - bw / 2, p.y + 1, bw, 3); }
+        ctx.globalAlpha = 1;
+      }
+      const c = s.close[hi], prev = hi > 0 ? s.close[hi - 1] : null;
+      const parts = [[s.t[hi], C.fg], ['開 ' + fmt(s.open[hi]), C.text], ['高 ' + fmt(s.high[hi]), C.text], ['低 ' + fmt(s.low[hi]), C.text],
+        ['收 ' + fmt(c), C.fg], [prev ? pct(c / prev - 1) : '', c >= prev ? C.up : C.down]];
+      MA[state.tf].forEach((m, j) => { if (state.maOn[state.tf].has(m)) parts.push([MA_LABEL[state.tf][m] + ' ' + fmt(s['ma' + m][hi]), css(MA_COLOR_KEYS[j])]); });
+      if (state.tf === 'D' && s.v) { const lv = s.v[hi]; parts.splice(1, 0, ['趨勢：' + VERDICT[lv], lv > 0 ? C.up : lv < 0 ? C.down : C.text]); }
+      if (state.tf === 'D' && s.rg) { const g = RG[s.rg[hi]]; parts.splice(1, 0, [DATA.trading.regimes[g], g === 'bull' ? C.up : g === 'bear' ? C.down : C.text]); }
+      label(p, parts);
+      if (state.tf === 'D') { let x0 = LEFT + 4; ctx.textAlign = 'left';
+        for (const mk of DATA.stocks[state.idx].marks.filter(m => m.i === hi)) {
+          const t = (mk.side === 'buy' ? '▲ ' : '▼ ') + mk.s.map(k => DATA.signals[k].name).join('、');
+          ctx.fillStyle = mk.side === 'buy' ? C.mark : css('--sellmark'); ctx.fillText(t, x0, p.y + 18); x0 += ctx.measureText(t).width + 14; } }
+    }
+    if (p.key === 'vol') {
+      const [, vmax] = range(['volume'], 0); const Y = scaler(p, 0, vmax * 1.1);
+      gridY(p, 0, vmax * 1.1, [vmax], v => (v / 1000 >= 10000 ? fmt(v / 1e7, 1) + '萬張' : fmt(v / 1000, 0) + '張'));
+      for (let i = a; i < b; i++) { const v = s.volume[i]; if (v == null) continue;
+        ctx.globalAlpha = 0.55; ctx.fillStyle = s.close[i] >= s.open[i] ? C.up : C.down;
+        const w = Math.max(1, bw * 0.7); ctx.fillRect(xOf(i) - w / 2, Y(v), w, p.y + p.h - Y(v)); ctx.globalAlpha = 1; }
+      label(p, [['成交量 ' + (s.volume[hi] == null ? '—' : fmt(s.volume[hi] / 1000, 0) + ' 張'), C.text]]);
+    }
+    if (p.key === 'macd') {
+      const [lo, hiV] = range(['dif', 'dea', 'hist'], 0.1); const Y = scaler(p, Math.min(lo, 0), Math.max(hiV, 0));
+      gridY(p, Math.min(lo, 0), Math.max(hiV, 0), [0], v => '0');
+      for (let i = a; i < b; i++) { const v = s.hist[i]; if (v == null) continue;
+        ctx.fillStyle = v >= 0 ? C.up : C.down; const w = Math.max(1, bw * 0.6); ctx.fillRect(xOf(i) - w / 2, Math.min(Y(v), Y(0)), w, Math.abs(Y(v) - Y(0))); }
+      line('dif', Y, css('--ma20')); line('dea', Y, css('--ma5'));
+      label(p, [['MACD(12,26,9)', C.text], ['DIF ' + fmt(s.dif[hi]), css('--ma20')], ['DEA ' + fmt(s.dea[hi]), css('--ma5')], ['柱 ' + fmt(s.hist[hi]), (s.hist[hi] ?? 0) >= 0 ? C.up : C.down]]);
+    }
+    if (p.key === 'rsi') {
+      const Y = scaler(p, 0, 100); gridY(p, 0, 100, [30, 50, 70], v => v);
+      ctx.fillStyle = C.grid; ctx.globalAlpha = 0.6; ctx.fillRect(LEFT, Y(70), L.plotW, Y(30) - Y(70)); ctx.globalAlpha = 1;
+      line('rsi', Y, css('--ma10'), 1.5);
+      label(p, [['RSI(14)', C.text], [fmt(s.rsi[hi], 1), css('--ma10')], ['30 以下超賣、70 以上超買', C.text]]);
+    }
+    if (p.key === 'kd') {
+      const Y = scaler(p, 0, 100); gridY(p, 0, 100, [20, 50, 80], v => v);
+      line('k', Y, css('--ma5'), 1.4); line('d', Y, css('--ma20'), 1.4);
+      label(p, [['KD(9)', C.text], ['K ' + fmt(s.k[hi], 1), css('--ma5')], ['D ' + fmt(s.d[hi], 1), css('--ma20')], ['20 以下低檔、80 以上高檔', C.text]]);
+    }
+  }
+  // x axis
+  const last = L.panes[L.panes.length - 1], yAxis = last.y + last.h + 4;
+  ctx.fillStyle = C.text; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  const every = Math.max(1, Math.ceil(80 / bw));
+  for (let i = b - 1; i >= a; i -= every) { if (xOf(i) < LEFT + 30) break; ctx.fillText(state.tf === 'M' ? s.t[i].slice(0, 7) : s.t[i].slice(2), xOf(i), yAxis); }
+  // crosshair
+  if (state.hover >= a && state.hover < b) {
+    ctx.strokeStyle = C.text; ctx.globalAlpha = 0.5; ctx.setLineDash([3, 3]); ctx.beginPath();
+    ctx.moveTo(xOf(state.hover), TOP); ctx.lineTo(xOf(state.hover), last.y + last.h); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+  }
+}
+
+/* interaction: hover, wheel zoom, drag pan */
+let drag = null;
+const idxAt = ev => { const r = cv.getBoundingClientRect(); const bw = (r.width - AXIS_W - LEFT) / state.count;
+  return state.start + Math.floor((ev.clientX - r.left - LEFT) / bw); };
+cv.addEventListener('pointermove', ev => {
+  if (drag) { const bw = (cv.clientWidth - AXIS_W - LEFT) / state.count; const n = series().t.length;
+    const shift = Math.round((drag.x - ev.clientX) / bw);
+    state.start = Math.max(0, Math.min(n - state.count, drag.start + shift)); }
+  state.hover = idxAt(ev); draw();
+});
+cv.addEventListener('pointerdown', ev => { drag = { x: ev.clientX, start: state.start }; cv.setPointerCapture(ev.pointerId); });
+cv.addEventListener('pointerup', () => { drag = null; });
+cv.addEventListener('pointerleave', () => { state.hover = -1; draw(); });
+cv.addEventListener('wheel', ev => {
+  ev.preventDefault(); const n = series().t.length;
+  const anchor = Math.max(state.start, Math.min(idxAt(ev), state.start + state.count - 1));
+  const next = Math.max(20, Math.min(n, Math.round(state.count * (ev.deltaY > 0 ? 1.15 : 0.87))));
+  const ratio = (anchor - state.start) / state.count;
+  state.count = next; state.start = Math.max(0, Math.min(n - next, Math.round(anchor - ratio * next)));
+  draw();
+}, { passive: false });
+window.addEventListener('resize', draw);
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { renderToolbar(); draw(); });
+
+/* ---------- trade log ---------- */
+function renderTrades() {
+  const s = DATA.stocks[state.idx], d = s.D.t, T = DATA.trading;
+  const pc = v => v == null ? '—' : pct(v), cls = v => v == null ? '' : v >= 0 ? 'up' : 'down';
+  const wr = v => v == null ? '—' : (v * 100).toFixed(0) + '%';
+  const line = (st, P, m) => `<tr${m === T.mode ? ' style="font-weight:600"' : ''}><td>${T.modes[m]}${m === T.mode ? '（目前使用）' : ''}</td>` +
+    `<td>${st.n}</td><td>${wr(st.win)}</td><td class="${cls(st.avg)}">${pc(st.avg)}</td><td class="${cls(st.roc)}">${pc(st.roc)}</td>` +
+    `<td>${P.n}</td><td>${wr(P.win)}</td><td class="${cls(P.avg)}">${pc(P.avg)}</td><td class="${cls(P.roc)}">${pc(P.roc)}</td></tr>`;
+  document.getElementById('tstats').innerHTML =
+    `<div class="tablewrap" style="width:100%"><table><tr><th rowspan="2">做法</th><th colspan="4">${s.name}</th><th colspan="4">全部 ${DATA.stocks.length} 檔</th></tr>` +
+    `<tr>${'<th>完成輪數</th><th>賺錢比例</th><th>平均每輪</th><th>報酬率</th>'.repeat(2)}</tr>` +
+    Object.keys(T.modes).map(m => line(s.modeStats[m], DATA.modePooled[m], m)).join('') +
+    `<tr><td class="base">同期間一直抱著</td><td colspan="3"></td><td class="${cls(s.hold)}">${pc(s.hold)}</td><td colspan="3"></td><td class="${cls(DATA.holdAvg)}">${pc(DATA.holdAvg)}</td></tr></table></div>` +
+    `<p class="lead" style="margin-top:6px">一輪＝從空手買進到全部賣出。每次買進投入 1 份資金；報酬率＝總損益 ÷ 最多同時投入的份數（加碼越多，用的錢越多，這樣比較才公平）。`+
+    `${DATA.tradingDays < 260 ? '⚠ 資料還不滿 260 天，年線算不出來，牛熊都是「資料不足」，所以「依牛熊切換」目前等於全進全出。' : ''}</p>`;
+  const rows = s.rounds.slice().reverse().flatMap(r => r.acts.map((x, j) =>
+    `<tr${j === 0 ? ' style="border-top:2px solid var(--line)"' : ''}><td>${d[x.i]}</td><td>${T.actions[x.t]}</td><td>${fmt(x.px)}</td><td>${REASON[x.r]}</td>` +
+    `<td>${x.u} 份</td><td>${T.modes[x.m]}</td><td class="${j === r.acts.length - 1 && r.e != null ? cls(r.ret) : ''}">${j === r.acts.length - 1 && r.e != null ? '本輪 ' + pct(r.ret) : ''}</td></tr>`
+  ).concat(r.e == null ? [`<tr><td>${d[d.length - 1]}</td><td>持有中</td><td>${fmt(s.D.close[s.D.close.length - 1])}（現價）</td><td></td><td></td><td></td><td class="${cls(r.ret)}">目前 ${pct(r.ret)}</td></tr>`] : [])).join('');
+  document.getElementById('tlog').innerHTML = `<tr><th>成交日</th><th>動作</th><th>成交價</th><th>原因</th><th>成交後持有</th><th>當時做法</th><th>結果</th></tr>` +
+    (rows || '<tr><td colspan="7" class="base">這段期間沒有符合買進條件的日子</td></tr>');
+}
+
+/* ---------- backtest table & legend ---------- */
+function renderBacktest() {
+  const s = DATA.stocks[state.idx], bt = s.bt, pool = DATA.pooled;
+  document.getElementById('btLead').textContent =
+    (DATA.tradingDays < 250 ? `⚠ 目前只有 ${DATA.tradingDays} 個交易日的資料，下表數字只能看看，等歷史回補完成才有參考價值。` : '') +
+    `統計過去每次訊號出現後 20 / 60 個交易日的漲跌。買點看「上漲比例」、賣點看「下跌比例」，都要比「任意一天」好才有意義。樣本少於 10 次的數字以灰色顯示。`;
+  const cell = (st, h, side) => {
+    if (!st || !st['n' + h]) return '<td class="base">—</td><td class="base">—</td>';
+    const few = st['n' + h] < 10 ? ' base' : '';
+    const ratio = side === 'sell' ? 1 - st['win' + h] : st['win' + h];
+    return `<td class="${few}">${(ratio * 100).toFixed(0)}%</td><td class="${st['avg' + h] >= 0 ? 'up' : 'down'}${few}">${pct(st['avg' + h])}</td>`;
+  };
+  const head = (title, word) => `<tr><th rowspan="2">${title}</th><th colspan="5">${s.name}</th><th colspan="5">全部 ${DATA.stocks.length} 檔合計</th></tr>` +
+    `<tr>${('<th>次數</th><th>20日' + word + '比例</th><th>20日平均漲跌</th><th>60日' + word + '比例</th><th>60日平均漲跌</th>').repeat(2)}</tr>`;
+  const row = (k, side) => {
+    const nm = k === '_any_day' ? '任意一天（基準）' : (side === 'buy' ? '▲ ' : '▼ ') + DATA.signals[k].name + (DATA.signals[k].ma ? '（參考）' : '');
+    return `<tr><td${k === '_any_day' ? ' class="base"' : ''}>${nm}</td><td>${bt[k].count}</td>${cell(bt[k], 20, side)}${cell(bt[k], 60, side)}` +
+      `<td>${pool[k] ? pool[k].count : '—'}</td>${cell(pool[k], 20, side)}${cell(pool[k], 60, side)}</tr>`;
+  };
+  const keys = side => Object.keys(DATA.signals).filter(k => DATA.signals[k].side === side);
+  document.getElementById('bt').innerHTML =
+    head('買點訊號', '上漲') + keys('buy').map(k => row(k, 'buy')).join('') + row('_any_day', 'buy') +
+    head('賣點訊號', '下跌') + keys('sell').map(k => row(k, 'sell')).join('') + row('_any_day', 'sell');
+}
+const legendOf = (side, ma) => Object.values(DATA.signals).filter(v => (side == null || v.side === side) && !!v.ma === ma).map(v => `<dt>${v.side === 'buy' ? '▲' : '▼'} ${v.name}</dt><dd>${v.desc}</dd>`).join('');
+{ const r = DATA.trading, R = r.reasons;
+  document.getElementById('trule').innerHTML =
+    `<b class="vl2">高勝率</b>（預設，不看下面任何條件）：${r.winrate}。用 2023–2025 年 54 檔權值股的歷史資料找出來：2023–24 年勝率 65%，沒參與挑選的 2025 年 70%、2026 年 81%（扣交易成本後）。<b>勝率高不代表每筆都賺</b>，偶爾一筆會虧 10–20%。<br>` +
+    `交易成本：所有做法的報酬都已扣除手續費 ${(r.fee * 100).toFixed(4)}%（買賣各一次）與證交稅（股票 ${(r.taxStock * 100).toFixed(1)}%、ETF ${(r.taxEtf * 100).toFixed(1)}%）。<br>` +
+    `${r.regimeNote ? '⚠ ' + r.regimeNote + '<br>' : ''}<b>牛熊判斷</b>：用 ${r.regimeFrom === 'self' ? '每檔自己' : r.regimeFrom} 的年線（240 日均線）。收盤在年線之上且年線比 20 天前高＝<b class="vl2">牛市</b>；` +
+    `收盤在年線之下且年線比 20 天前低＝<b class="vl-2">熊市</b>；其他＝盤整；資料不滿 260 天＝資料不足。價格圖頂端的細色帶就是每天的牛熊。<br>` +
+    `<b>全進全出</b>（熊市、盤整、資料不足時使用）：<b class="vl2">買進</b>＝${r.entry}；` +
+    `<b class="vl-2">全部賣出</b>＝${R.take_profit}、${R.below_ma10}、${R.stop_loss}，任一成立。<br>` +
+    `<b>低點加倉、高點賣一半</b>（牛市時使用）：<b class="vl2">買進／加碼 1 份</b>＝底部確認剛成立，或${r.pullback}（最多 ${r.maxUnits} 份）；` +
+    `<b class="vl-2">賣出一半</b>＝${R.take_profit}；<b class="vl-2">全部賣出</b>＝${R.below_ma10}、${R.stop_loss}。<br>` +
+    `<b>均線</b>：10 日線在月線之上＝多頭（上漲還沒結束），10 日線在月線之下＝空頭（下跌還沒結束）。` +
+    `${r.maEntry ? `買進／加碼還要「10 日線止跌」（比 ${r.ma10TurnDays} 天前高），下跌告一段落才買（目前開啟）。` : '買進不看均線（目前關閉 ma_entry_filter）。'}` +
+    `${r.maHold ? '10 日線在月線之上時區域高點先不賣，上漲還沒結束就續抱；10 日線跌破月線後區域高點恢復照賣（目前開啟）。' : '10 日線在月線之上時區域高點照賣（ma_hold_in_uptrend 目前關閉）。'}` +
+    `均線交叉（5 日／10 日、10 日／月線、月線／季線）列在下方訊號表，只做參考統計。<br>` +
+    `目前設定：<b>${r.modes[r.mode]}</b>（在 config.yaml 的 trading.mode 修改：auto／all_in／scale）。訊號用當天收盤判斷，下一個交易日開盤成交。`; }
+{ const r = DATA.verdictRule;
+  document.getElementById('vrule').innerHTML =
+    `趨勢強弱描述「現在的狀態」，會比買賣點慢，只當參考，不拿來決定買賣。每天檢查 6 個狀態條件：收盤在月線之上、收盤在季線之上、月線上揚、MACD 柱狀體為正、K 值在 D 值之上、RSI 在 50 之上，成立 +1、不成立 −1。` +
+    `再加上近 5 日出現過的買點訊號種數（最多 +${r.cap}），減去賣點訊號種數（最多 −${r.cap}），總分介於 −8～+8。<br>` +
+    `<b class="vl2">強多</b> ≥ +${r.strong}　<b class="vl1">偏多</b> +${r.lean}～+${r.strong - 1}　<b class="vl0">中性</b> −${r.lean - 1}～+${r.lean - 1}　` +
+    `<b class="vl-1">偏空</b> −${r.lean}～−${r.strong - 1}　<b class="vl-2">強空</b> ≤ −${r.strong}<br>` +
+    `例外：RSI ≥ ${r.overheatRsi} 或 5 日漲幅 ≥ ${(r.overheatRet5 * 100).toFixed(0)}%（過熱）時最多只給「中性」；RSI ≤ ${r.oversoldRsi}（超賣）時最少給「中性」。`; }
+document.getElementById('legend').innerHTML = legendOf('buy', false);
+document.getElementById('legendSell').innerHTML = legendOf('sell', false);
+document.getElementById('legendMa').innerHTML = legendOf(null, true);
+
+function renderAll() { renderList(); renderHead(); renderToolbar(); resetView(); draw(); renderTrades(); renderBacktest(); }
+renderAll();
+</script>
+</body>
+</html>

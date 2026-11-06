@@ -51,6 +51,16 @@ jobs:
 
       - run: pip install -r requirements.txt
 
+      - name: 先載入 Releases 裡這一年已有的資料（只補缺的，重跑很快）
+        run: |
+          mkdir -p "$SCREENER_DATA_DIR"
+          if gh release download history --pattern "history-${{ matrix.year }}.zip" --dir /tmp/old 2>/dev/null; then
+            unzip -oq /tmp/old/history-${{ matrix.year }}.zip -d "$SCREENER_DATA_DIR"
+            echo "已載入既有資料：$(find "$SCREENER_DATA_DIR" -name '*.csv' | wc -l) 個檔案"
+          else
+            echo "這一年還沒有資料，從頭抓"
+          fi
+
       - name: 抓 ${{ matrix.year }} 年
         run: python -m screener backfill --start ${{ matrix.year }}-01-01 --end ${{ matrix.year }}-12-31
 

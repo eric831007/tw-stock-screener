@@ -11,7 +11,7 @@ import datetime as dt
 import pandas as pd
 
 from .. import http
-from ..parse import SchemaError, clean_headers, institutional_table, pick_table, price_table, to_number
+from ..parse import SchemaError, clean_headers, institutional_table, margin_table, pick_table, price_table, to_number
 from .twse import _info_frame
 
 BASE = "https://www.tpex.org.tw/www/zh-tw"
@@ -39,6 +39,15 @@ def institutional(day: dt.date) -> pd.DataFrame | None:
         return None
     fields, rows = table
     return institutional_table(_expand_headers(fields, rows), rows)
+
+
+def margin(day: dt.date) -> pd.DataFrame | None:
+    """上櫃融資融券餘額（margin/balance），單位張。"""
+    payload = http.get_json(f"{BASE}/margin/balance", {"date": _date(day), "id": "", "response": "json"})
+    table = pick_table(payload or {}, ["代號", "資餘額"])
+    if table is None:
+        return None
+    return margin_table(*table)
 
 
 # 櫃買中心的三大法人表是兩層表頭：第二層每欄只寫「買進股數／賣出股數／買賣超股數」，

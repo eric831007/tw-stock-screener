@@ -34,6 +34,7 @@ def fetch_day(day: dt.date) -> str:
     if day in store.holidays():
         return "holiday"
     if store.is_complete(day):
+        fetch_optional(day)
         return "complete"
 
     # TWSE prices first: no TWSE prices on a past weekday means the market was closed.
@@ -52,17 +53,67 @@ def fetch_day(day: dt.date) -> str:
 
     for kind in store.KINDS:
         for market, source in MARKETS.items():
-            if store.has(kind, day, market):
+            if store.has(kind, day, market) or not store.available(kind, day, market):
                 continue
             df = _try(getattr(source, kind), day, market, kind)
             if df is _FAILED:
                 continue
             if df is None or df.empty:
-                log.warning("%s %s %s 尚無資料（可能還沒公布）", day, market, kind)
+                if day < today_taipei():
+                    log.warning("%s %s%s：交易所沒有這天的資料", day, store.MARKET_NAMES[market], store.KIND_NAMES[kind])
+                else:
+                    log.warning("%s %s%s：還沒公布", day, store.MARKET_NAMES[market], store.KIND_NAMES[kind])
                 continue
             _save(kind, day, market, df)
 
-    return "complete" if store.is_complete(day) else "partial"
+    complete = store.is_complete(day)
+    if store.has("prices", day, "TWSE"):
+        fetch_optional(day)
+    return "complete" if complete else "partial"
+
+
+def fetch_optional(day: dt.date) -> None:
+    """融資融券等選用資料：還沒存的才抓；抓不到（還沒公布或失敗）只記 log，不算這天失敗。"""
+    for kind in store.OPTIONAL_KINDS:
+        for market, source in MARKETS.items():
+            if store.has(kind, day, market) or not hasattr(source, kind) or not store.available(kind, day, market):
+                continue
+            try:
+                df = getattr(source, kind)(day)
+            except Exception as exc:
+                log.warning("%s %s %s 抓取失敗（選用資料，下次再補）：%s", day, market, kind, exc)
+                continue
+            if df is None or df.empty:
+                log.info("%s %s %s 尚未公布", day, market, kind)
+                continue
+            _save(kind, day, market, df)
+
+
+def catch_up_optional(n_days: int = 5) -> None:
+    """補最近 n 個已存交易日缺的選用資料（例如融資融券比排程晚公布）。"""
+    for day in store.trading_days()[-n_days:]:
+        fetch_optional(day)
+
+
+def update_holders(min_gap_days: int = 8) -> str | None:
+    """集保股權分散表（每週公布）。上次存的資料日期（週五）已經超過 min_gap_days 天才去下載，
+    避免下一週資料還沒公布前每天重複下載（約 2.4 MB）。回傳存下的日期。"""
+    from .sources import tdcc
+    days = store.holders_days()
+    if days and (today_taipei() - days[-1]).days < min_gap_days:
+        return None
+    try:
+        got = tdcc.holders_latest()
+    except Exception as exc:
+        log.warning("集保股權分散表抓取失敗（選用資料）：%s", exc)
+        return None
+    if not got:
+        return None
+    day_s, df = got
+    day = dt.date.fromisoformat(day_s)
+    if not store.has(store.HOLDERS, day, "ALL"):
+        _save(store.HOLDERS, day, "ALL", df)
+    return day_s
 
 
 _FAILED = object()
@@ -99,8 +150,17 @@ def backfill(trading_days: int, end: dt.date | None = None) -> None:
     log.warning("往回 %d 天只找到 %d 個交易日", limit, found)
 
 
+def _note_unavailable(start: dt.date, end: dt.date) -> None:
+    """回補期間有早於資料起始日的部分時，先講清楚哪些資料不會有。"""
+    for (kind, market), first in sorted(store.EARLIEST.items(), key=lambda x: x[1]):
+        if start < first and (kind in store.KINDS or kind in store.OPTIONAL_KINDS):
+            log.info("說明：%s%s 從 %s 才有資料，%s 以前的日子不會抓這一項",
+                     store.MARKET_NAMES[market], store.KIND_NAMES[kind], first, first)
+
+
 def backfill_range(start: dt.date, end: dt.date) -> None:
     """Fetch every weekday from `end` back to `start` (inclusive)."""
+    _note_unavailable(start, end)
     day, found = end, 0
     while day >= start:
         status = fetch_day(day)

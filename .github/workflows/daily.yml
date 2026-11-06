@@ -21,7 +21,7 @@ concurrency:
 jobs:
   fetch:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 350
     steps:
       - uses: actions/checkout@v5
 
@@ -42,6 +42,22 @@ jobs:
       - name: 抓今天
         run: python -m screener fetch
 
+      - name: 下載歷史資料（儀表板用，不存進 repo）
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p /tmp/history-zips /tmp/alldata
+          gh release download history --pattern 'history-*.zip' --dir /tmp/history-zips || echo "沒有歷史資料，只用 data/"
+          for z in /tmp/history-zips/*.zip; do [ -f "$z" ] && unzip -oq "$z" -d /tmp/alldata; done
+          cp -r data/. /tmp/alldata/
+
+      - name: 產生權值股儀表板（含 2023 年起的歷史）
+        if: always()
+        env:
+          SCREENER_DATA_DIR: /tmp/alldata
+        run: python -m screener dashboard
+
       - name: 資料概況
         if: always()
         run: python -m screener status
@@ -52,7 +68,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if [ ! -d data ]; then echo "沒有資料可存"; exit 0; fi
-          git add data
+          git add data $( [ -d dashboard ] && echo dashboard )
           if git diff --cached --quiet; then
             echo "沒有新資料"
           else
